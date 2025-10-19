@@ -4,13 +4,17 @@ on:
   push:
     branches: [ main ]
     paths:
-      - "src/services/auth-service/**"        
+      - "src/services/auth-service/**"
   workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
 
 env:
   DOTNET_VERSION: "8.0.x"
-  AZURE_WEBAPP_NAME: ${{ secrets.AZURE_WEBAPP_NAME }}
-  AZURE_RESOURCE_GROUP: ${{ secrets.AZURE_RESOURCE_GROUP }}
+  AZURE_WEBAPP_NAME: ${{ vars.AZURE_WEBAPP_NAME }}
+  AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
 
 jobs:
   build-and-deploy:
@@ -54,19 +58,23 @@ jobs:
         run: dotnet publish -c Release -o ./publish /p:UseAppHost=false
         working-directory: src/services/auth-service
 
+      # OIDC login 
       - name: Azure login
         if: steps.detect.outputs.exists == 'true'
-        uses: azure/login@v2
+        uses: azure/login@v1
         with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
 
       - name: Deploy to Azure Web App
         if: steps.detect.outputs.exists == 'true'
-        uses: azure/webapps-deploy@v3
+        uses: azure/webapps-deploy@v2
         with:
           app-name: ${{ env.AZURE_WEBAPP_NAME }}
           package: src/services/auth-service/publish
 
       - name: Azure logout
         if: always()
-        run: az logout
+        run: az logout || true
