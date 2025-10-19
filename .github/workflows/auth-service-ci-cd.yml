@@ -4,8 +4,7 @@ on:
   push:
     branches: [ main ]
     paths:
-      - "src/services/auth-service/**"
-      - ".github/workflows/auth-service-ci-cd.yml"
+      - "src/services/auth-service/**"        
   workflow_dispatch:
 
 env:
@@ -15,36 +14,54 @@ env:
 
 jobs:
   build-and-deploy:
-    if: ${{ hashFiles('src/services/auth-service/**/*.csproj') != '' }}
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Detect project
+        id: detect
+        shell: bash
+        run: |
+          shopt -s globstar nullglob
+          files=(src/services/auth-service/**/*.csproj)
+          if [ ${#files[@]} -gt 0 ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "No .csproj found under src/services/auth-service — skipping build/deploy."
+          fi
+
       - name: Setup .NET
+        if: steps.detect.outputs.exists == 'true'
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
       - name: Restore
+        if: steps.detect.outputs.exists == 'true'
         run: dotnet restore
         working-directory: src/services/auth-service
 
       - name: Build
+        if: steps.detect.outputs.exists == 'true'
         run: dotnet build --configuration Release --no-restore
         working-directory: src/services/auth-service
 
       - name: Publish
+        if: steps.detect.outputs.exists == 'true'
         run: dotnet publish -c Release -o ./publish /p:UseAppHost=false
         working-directory: src/services/auth-service
 
       - name: Azure login
+        if: steps.detect.outputs.exists == 'true'
         uses: azure/login@v2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
       - name: Deploy to Azure Web App
+        if: steps.detect.outputs.exists == 'true'
         uses: azure/webapps-deploy@v3
         with:
           app-name: ${{ env.AZURE_WEBAPP_NAME }}
